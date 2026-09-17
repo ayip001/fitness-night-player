@@ -1,0 +1,284 @@
+:root {
+  --bg: #0e1116;
+  --bg-card: #171b22;
+  --bg-card-2: #1f252e;
+  --text: #f2f4f7;
+  --muted: #8b93a1;
+  --line: rgba(255, 255, 255, 0.08);
+  --mint: #3dff9a;
+  --orange: #ff8a3d;
+  --danger: #ff5d6c;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  padding: calc(16px + var(--safe-top)) 16px calc(28px + var(--safe-bottom));
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.03em;
+}
+
+.status-pill {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab,
+.btn {
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tab.active.mint {
+  background: var(--mint);
+  color: #082214;
+}
+
+.tab.active.orange {
+  background: var(--orange);
+  color: #2a1406;
+}
+
+.now {
+  padding: 20px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 22%, transparent), transparent 42%),
+    var(--bg-card);
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+
+.now.mint {
+  --accent: var(--mint);
+}
+
+.now.orange {
+  --accent: var(--orange);
+}
+
+.now-label {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.now-title {
+  margin: 8px 0 4px;
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.now-artist,
+.next-line,
+.meta-line {
+  margin: 0;
+  color: var(--muted);
+}
+
+.progress-wrap {
+  margin: 18px 0 8px;
+}
+
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-card-2);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent, var(--mint));
+}
+
+.times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr;
+  gap: 8px;
+  margin: 16px 0 8px;
+}
+
+.btn.primary {
+  background: var(--accent, var(--mint));
+  color: #082214;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.now.orange .btn.primary {
+  color: #2a1406;
+}
+
+.btn.danger {
+  color: var(--danger);
+}
+
+.import-row,
+.hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.hint {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.hint strong {
+  color: var(--text);
+}
+
+.hidden-input {
+  display: none;
+}
+
+.track-list {
+  display: grid;
+  gap: 6px;
+}
+
+.track {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--bg-card);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.track.current {
+  outline: 2px solid color-mix(in srgb, var(--accent, var(--mint)) 70%, white 0%);
+}
+
+.track.missing {
+  opacity: 0.55;
+}
+
+.num {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.track-title {
+  display: block;
+  font-weight: 600;
+}
+
+.track-artist {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--bg-card-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.badge.ok {
+  background: color-mix(in srgb, var(--mint) 20%, transparent);
+  color: var(--mint);
+}
+
+.audio-layer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.toast {
+  min-height: 20px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+}

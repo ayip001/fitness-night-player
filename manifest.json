@@ -1,0 +1,19 @@
+{
+  "name": "Fitness Night Player",
+  "short_name": "Night Player",
+  "description": "Sequential playlist player with a 9 second crossfade for iOS Safari.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e1116",
+  "theme_color": "#0e1116",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

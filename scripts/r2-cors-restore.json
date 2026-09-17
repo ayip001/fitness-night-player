@@ -1,0 +1,20 @@
+{
+  "rules": [
+    {
+      "id": "prologue-app",
+      "allowed": {
+        "origins": [
+          "http://localhost:3000",
+          "https://prologue.run",
+          "https://www.prologue.run",
+          "https://prologue-run.vercel.app",
+          "https://staging.prologue.run"
+        ],
+        "methods": ["GET", "HEAD"],
+        "headers": ["*"]
+      },
+      "exposeHeaders": ["ETag", "Content-Length", "Content-Range"],
+      "maxAgeSeconds": 0
+    }
+  ]
+}

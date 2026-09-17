@@ -20,6 +20,7 @@ const state = {
   startingFade: false,
   downloading: false,
   downloadDone: 0,
+  scrubbing: false,
   db: null,
 };
 
@@ -313,6 +314,98 @@ async function unlockAudio() {
 
 function stopCrossfade() {
   state.crossfade = null;
+  state.startingFade = false;
+}
+
+function cancelCrossfade() {
+  const fade = state.crossfade;
+  if (!fade) {
+    state.startingFade = false;
+    return;
+  }
+  fade.incoming.pause();
+  setDeckVolume(fade.incoming, 0);
+  setDeckVolume(fade.outgoing, 1);
+  stopCrossfade();
+}
+
+function seekTo(seconds) {
+  cancelCrossfade();
+  const audio = activeAudio();
+  if (!Number.isFinite(audio.duration) || audio.duration <= 0) {
+    return;
+  }
+  audio.currentTime = Math.min(Math.max(0, seconds), Math.max(0, audio.duration - 0.05));
+  updateScrubberUi(audio.currentTime, audio.duration);
+  updateMediaSession();
+}
+
+function seekBy(offset) {
+  const audio = activeAudio();
+  seekTo((Number.isFinite(audio.currentTime) ? audio.currentTime : 0) + offset);
+}
+
+function ratioFromPointer(event, element) {
+  const point = event.touches ? event.touches[0] || event.changedTouches[0] : event;
+  const rect = element.getBoundingClientRect();
+  if (!rect.width) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, (point.clientX - rect.left) / rect.width));
+}
+
+function updateScrubberUi(current, duration) {
+  const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
+  const safeCurrent = Number.isFinite(current) ? current : 0;
+  const ratio = safeDuration ? Math.min(1, safeCurrent / safeDuration) : 0;
+  els.progressFill.style.width = `${ratio * 100}%`;
+  els.elapsed.textContent = formatTime(safeCurrent);
+  els.remaining.textContent = `-${formatTime(Math.max(0, safeDuration - safeCurrent))}`;
+  els.scrubber.setAttribute("aria-valuemin", "0");
+  els.scrubber.setAttribute("aria-valuemax", String(Math.floor(safeDuration)));
+  els.scrubber.setAttribute("aria-valuenow", String(Math.floor(safeCurrent)));
+}
+
+function bindScrubber() {
+  const scrubber = els.scrubber;
+  const pointerRatio = (event) => ratioFromPointer(event, scrubber);
+
+  const start = (event) => {
+    const audio = activeAudio();
+    if (!Number.isFinite(audio.duration) || audio.duration <= 0) {
+      return;
+    }
+    event.preventDefault();
+    state.scrubbing = true;
+    if (event.pointerId != null && scrubber.setPointerCapture) {
+      scrubber.setPointerCapture(event.pointerId);
+    }
+    seekTo(pointerRatio(event) * audio.duration);
+  };
+
+  const move = (event) => {
+    if (!state.scrubbing) {
+      return;
+    }
+    event.preventDefault();
+    const audio = activeAudio();
+    seekTo(pointerRatio(event) * audio.duration);
+  };
+
+  const end = (event) => {
+    if (!state.scrubbing) {
+      return;
+    }
+    if (event) {
+      event.preventDefault();
+    }
+    state.scrubbing = false;
+  };
+
+  scrubber.addEventListener("pointerdown", start);
+  scrubber.addEventListener("pointermove", move);
+  scrubber.addEventListener("pointerup", end);
+  scrubber.addEventListener("pointercancel", end);
 }
 
 function activeAudio() {
@@ -382,12 +475,17 @@ function bindMediaSession() {
       // Unsupported action on this Safari version.
     }
   };
-  bind("play", () => playFrom(state.index));
+  bind("play", () => resumePlayback());
   bind("pause", () => pausePlayback());
   bind("previoustrack", () => skip(-1));
   bind("nexttrack", () => skip(1));
   bind("seekbackward", (event) => seekBy(-(event.seekOffset || 10)));
   bind("seekforward", (event) => seekBy(event.seekOffset || 10));
+  bind("seekto", (event) => {
+    if (typeof event.seekTime === "number") {
+      seekTo(event.seekTime);
+    }
+  });
 }
 
 async function playFrom(index) {
@@ -436,21 +534,31 @@ async function playFrom(index) {
 
 function pausePlayback() {
   state.playing = false;
-  stopCrossfade();
+  cancelCrossfade();
   decks.forEach((audio) => audio.pause());
   updateMediaSession();
   render();
 }
 
-function seekBy(offset) {
+async function resumePlayback() {
   const audio = activeAudio();
-  if (!Number.isFinite(audio.duration)) {
+  const playlist = currentPlaylist();
+  const key = trackKey(playlist.id, state.index);
+  if (audio.dataset.key === key && audio.src && !audio.ended) {
+    await unlockAudio();
+    state.playing = true;
+    try {
+      await audio.play();
+    } catch (error) {
+      state.playing = false;
+      setToast("Safari blocked playback. Tap Play again.");
+      return;
+    }
+    updateMediaSession();
+    render();
     return;
   }
-  audio.currentTime = Math.min(
-    Math.max(0, audio.currentTime + offset),
-    Math.max(0, audio.duration - 0.05),
-  );
+  await playFrom(state.index);
 }
 
 async function skip(step) {
@@ -523,7 +631,7 @@ function finishCrossfade() {
 }
 
 function maybeStartCrossfade() {
-  if (!state.playing || state.crossfade || state.startingFade) {
+  if (!state.playing || state.crossfade || state.startingFade || state.scrubbing) {
     return;
   }
   const audio = activeAudio();
@@ -543,25 +651,26 @@ function maybeStartCrossfade() {
 
 function tick() {
   const audio = activeAudio();
-  if (state.crossfade) {
-    const fade = state.crossfade;
-    const progress = (performance.now() - fade.startedAt) / fade.durationMs;
-    const volumes = equalPower(progress);
-    setDeckVolume(fade.outgoing, volumes.fadingOut);
-    setDeckVolume(fade.incoming, volumes.fadingIn);
-    if (progress >= 1) {
-      finishCrossfade();
+  if (!state.scrubbing) {
+    if (state.crossfade) {
+      const fade = state.crossfade;
+      const progress = (performance.now() - fade.startedAt) / fade.durationMs;
+      const volumes = equalPower(progress);
+      setDeckVolume(fade.outgoing, volumes.fadingOut);
+      setDeckVolume(fade.incoming, volumes.fadingIn);
+      if (progress >= 1) {
+        finishCrossfade();
+      }
+    } else {
+      maybeStartCrossfade();
     }
-  } else {
-    maybeStartCrossfade();
   }
 
   const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
   const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
-  const ratio = duration ? Math.min(1, current / duration) : 0;
-  els.progressFill.style.width = `${ratio * 100}%`;
-  els.elapsed.textContent = formatTime(current);
-  els.remaining.textContent = `-${formatTime(Math.max(0, duration - current))}`;
+  if (!state.scrubbing) {
+    updateScrubberUi(current, duration);
+  }
   els.playButton.textContent = state.playing ? "Pause" : "Play";
   const playlist = currentPlaylist();
   const cached = loadedCount(playlist);
@@ -649,7 +758,7 @@ function bindUi() {
       pausePlayback();
       return;
     }
-    playFrom(state.index);
+    resumePlayback();
   });
   els.prevButton.addEventListener("click", () => skip(-1));
   els.nextButton.addEventListener("click", () => skip(1));
@@ -675,6 +784,7 @@ function cacheDom() {
   els.next = document.querySelector("#next-line");
   els.meta = document.querySelector("#meta-line");
   els.progressFill = document.querySelector("#progress-fill");
+  els.scrubber = document.querySelector("#scrubber");
   els.elapsed = document.querySelector("#elapsed");
   els.remaining = document.querySelector("#remaining");
   els.playButton = document.querySelector("#play");
@@ -714,6 +824,7 @@ async function init() {
   cacheDom();
   setupDecks();
   bindUi();
+  bindScrubber();
   bindMediaSession();
   try {
     state.db = await openDb();
@@ -727,7 +838,7 @@ async function init() {
   render();
   requestAnimationFrame(tick);
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=4").catch(() => {});
+    navigator.serviceWorker.register("./sw.js?v=5").catch(() => {});
   }
   const playlist = currentPlaylist();
   if (loadedCount(playlist) < playlist.tracks.length) {

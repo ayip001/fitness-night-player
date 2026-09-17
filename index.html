@@ -14,7 +14,7 @@
     <link rel="manifest" href="./manifest.json" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=4" />
+    <link rel="stylesheet" href="./styles.css?v=5" />
   </head>
   <body>
     <main class="app">
@@ -30,7 +30,7 @@
         <div class="now-label">Now playing</div>
         <h2 id="now-title" class="now-title">Download the playlist</h2>
         <p id="now-artist" class="now-artist">Nothing cached yet</p>
-        <div class="progress-wrap">
+        <div id="scrubber" class="progress-wrap" role="slider" aria-label="Seek" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
           <div class="progress-track">
             <div id="progress-fill" class="progress-fill"></div>
           </div>
@@ -79,7 +79,7 @@
       <audio id="deck-b" playsinline webkit-playsinline></audio>
     </div>
 
-    <script src="./playlists.js?v=4"></script>
-    <script src="./app.js?v=4"></script>
+    <script src="./playlists.js?v=5"></script>
+    <script src="./app.js?v=5"></script>
   </body>
 </html>

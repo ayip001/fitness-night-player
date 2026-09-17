@@ -146,20 +146,38 @@ h1 {
 }
 
 .progress-wrap {
-  margin: 18px 0 8px;
+  margin: 10px 0 8px;
+  padding: 14px 0;
+  touch-action: none;
+  cursor: pointer;
 }
 
 .progress-track {
   height: 8px;
   border-radius: 999px;
   background: var(--bg-card-2);
-  overflow: hidden;
+  position: relative;
 }
 
 .progress-fill {
   height: 100%;
   width: 0;
+  border-radius: 999px;
   background: var(--accent, var(--mint));
+  position: relative;
+}
+
+.progress-wrap .progress-fill::after {
+  content: "";
+  position: absolute;
+  right: -7px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translateY(-50%);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, var(--mint)) 25%, transparent);
 }
 
 .times {

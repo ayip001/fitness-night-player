@@ -7,7 +7,9 @@ Thumbs.db
 *.flac
 *.ogg
 *.opus
-audio/
-node_modules/
+audio/*.mp3
+audio/mapping.txt
+_names.json
+.wrangler/
 .idea/
 .vscode/

@@ -1,7 +1,9 @@
 const CROSSFADE_SECONDS = 9;
 const SKIP_FADE_SECONDS = 0.35;
+const DOWNLOAD_CONCURRENCY = 2;
+const AUDIO_BASE = "https://images.prologue.run/tmp-fitness-night/";
 const DB_NAME = "fitness-night-player";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "tracks";
 const SILENT_WAV =
   "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
@@ -16,6 +18,8 @@ const state = {
   unlocked: false,
   crossfade: null,
   startingFade: false,
+  downloading: false,
+  downloadDone: 0,
   db: null,
 };
 
@@ -44,41 +48,6 @@ function setToast(message) {
   els.toast.textContent = message || "";
 }
 
-function normalize(value) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .replace(/\.(mp3|m4a|aac|wav|flac|ogg|opus|wma)$/i, "")
-    .replace(/^\d{1,3}[\s._-]*/, "")
-    .replace(
-      /\b(tabata|radio edit|original mix|remastered \d+|single version|remix|edit|version)\b/g,
-      " ",
-    )
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function scoreFile(fileName, track) {
-  const fileNorm = normalize(fileName);
-  const titleNorm = normalize(track.title);
-  const artistNorm = normalize(track.artist);
-  if (!fileNorm || !titleNorm) {
-    return 0;
-  }
-  if (fileNorm === titleNorm || fileNorm.includes(titleNorm) || titleNorm.includes(fileNorm)) {
-    return 100;
-  }
-  const fileTokens = new Set(fileNorm.split(" ").filter(Boolean));
-  const titleTokens = titleNorm.split(" ").filter((token) => token.length > 2);
-  const artistTokens = artistNorm.split(" ").filter((token) => token.length > 2);
-  const titleHits = titleTokens.filter((token) => fileTokens.has(token)).length;
-  const artistHits = artistTokens.filter((token) => fileTokens.has(token)).length;
-  const titleScore = titleTokens.length ? (titleHits / titleTokens.length) * 80 : 0;
-  const artistScore = artistTokens.length ? (artistHits / artistTokens.length) * 20 : 0;
-  return titleScore + artistScore;
-}
-
 function equalPower(progress) {
   const clamped = Math.min(1, Math.max(0, progress));
   return {
@@ -92,9 +61,10 @@ function openDb() {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
+      if (db.objectStoreNames.contains(STORE_NAME)) {
+        db.deleteObjectStore(STORE_NAME);
       }
+      db.createObjectStore(STORE_NAME);
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -181,27 +151,137 @@ async function persistFile(key, file) {
   };
   state.files.set(key, record);
   revokeUrl(key);
-  try {
-    await idbPut(key, record);
-  } catch (error) {
-    console.warn("IndexedDB save failed", error);
-  }
+  await idbPut(key, record);
 }
 
 async function restoreFiles() {
-  for (const playlist of window.PLAYLISTS) {
-    for (let index = 0; index < playlist.tracks.length; index += 1) {
-      const key = trackKey(playlist.id, index);
-      try {
-        const record = await idbGet(key);
-        if (record && record.blob) {
-          state.files.set(key, record);
-        }
-      } catch (error) {
-        console.warn("IndexedDB read failed", error);
+  const playlist = currentPlaylist();
+  for (let index = 0; index < playlist.tracks.length; index += 1) {
+    const key = trackKey(playlist.id, index);
+    try {
+      const record = await idbGet(key);
+      if (record && record.blob) {
+        state.files.set(key, record);
       }
+    } catch (error) {
+      console.warn("IndexedDB read failed", error);
     }
   }
+}
+
+function mimeFromName(name) {
+  if (name.endsWith(".m4a") || name.endsWith(".aac")) {
+    return "audio/mp4";
+  }
+  if (name.endsWith(".wav")) {
+    return "audio/wav";
+  }
+  return "audio/mpeg";
+}
+
+function trackUrl(track) {
+  const name = (track.file || "").split("/").pop();
+  return `${AUDIO_BASE}${name}`;
+}
+
+async function fetchTrack(track) {
+  const url = trackUrl(track);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Could not download ${url}`);
+  }
+  const blob = await response.blob();
+  const name = url.split("/").pop();
+  return new File([blob], name, { type: blob.type || mimeFromName(name) });
+}
+
+async function runPool(items, worker, limit) {
+  const executing = new Set();
+  for (const item of items) {
+    const task = Promise.resolve().then(() => worker(item));
+    executing.add(task);
+    const cleanup = () => executing.delete(task);
+    task.then(cleanup, cleanup);
+    if (executing.size >= limit) {
+      await Promise.race(executing);
+    }
+  }
+  await Promise.all(executing);
+}
+
+function updateDownloadUi() {
+  const playlist = currentPlaylist();
+  const cached = loadedCount(playlist);
+  const total = playlist.tracks.length;
+  const ratio = total ? cached / total : 0;
+  els.downloadFill.style.width = `${ratio * 100}%`;
+  els.downloadButton.disabled = state.downloading || cached === total;
+  if (state.downloading) {
+    els.downloadTitle.textContent = `Downloading ${state.downloadDone} / ${total}`;
+    els.downloadDetail.textContent = "Keep this page open until every track is saved on the phone.";
+    els.downloadButton.textContent = "Downloading…";
+  } else if (cached === total) {
+    els.downloadTitle.textContent = "Saved on this phone";
+    els.downloadDetail.textContent = "All 35 tracks are cached. Playback will not stream.";
+    els.downloadButton.textContent = "Downloaded";
+  } else {
+    els.downloadTitle.textContent = `Save playlist on this phone (${cached}/${total})`;
+    els.downloadDetail.textContent = "Downloads every track once, then plays from device storage.";
+    els.downloadButton.textContent = "Download all";
+  }
+}
+
+async function downloadAll() {
+  if (state.downloading) {
+    return;
+  }
+  const playlist = currentPlaylist();
+  const missing = playlist.tracks
+    .map((track, index) => ({ track, index }))
+    .filter(({ index }) => !state.files.has(trackKey(playlist.id, index)));
+  if (!missing.length) {
+    setToast("Playlist already cached on this phone.");
+    updateDownloadUi();
+    return;
+  }
+
+  state.downloading = true;
+  state.downloadDone = loadedCount(playlist);
+  updateDownloadUi();
+  render();
+  setToast("Downloading playlist into phone storage…");
+
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(() => {});
+  }
+
+  let failures = 0;
+  await runPool(
+    missing,
+    async ({ track, index }) => {
+      try {
+        const file = await fetchTrack(track);
+        await persistFile(trackKey(playlist.id, index), file);
+      } catch (error) {
+        failures += 1;
+        console.warn(error);
+      }
+      state.downloadDone = loadedCount(playlist);
+      updateDownloadUi();
+      render();
+    },
+    DOWNLOAD_CONCURRENCY,
+  );
+
+  state.downloading = false;
+  const cached = loadedCount(playlist);
+  if (failures) {
+    setToast(`Cached ${cached}/${playlist.tracks.length}. Open this page from the local server, not GitHub Pages.`);
+  } else {
+    setToast("All tracks are on this phone. You can play with the screen locked.");
+  }
+  updateDownloadUi();
+  render();
 }
 
 async function unlockAudio() {
@@ -310,12 +390,12 @@ function bindMediaSession() {
   bind("seekforward", (event) => seekBy(event.seekOffset || 10));
 }
 
-async function playFrom(index, { fadeIn = false } = {}) {
+async function playFrom(index) {
   const playlist = currentPlaylist();
   if (!state.files.has(trackKey(playlist.id, index))) {
     const fallback = nextLoadedIndex(index - 1, 1);
     if (fallback === -1) {
-      setToast("Load audio files before playing.");
+      setToast("Download the playlist onto this phone first.");
       return;
     }
     index = fallback;
@@ -329,12 +409,12 @@ async function playFrom(index, { fadeIn = false } = {}) {
   const current = activeAudio();
   const standby = idleAudio();
   if (!loadDeck(current, index)) {
-    setToast("That track is missing a file.");
+    setToast("That track is not cached yet.");
     return;
   }
 
   current.currentTime = 0;
-  setDeckVolume(current, fadeIn ? 0 : 1);
+  setDeckVolume(current, 1);
   try {
     await current.play();
   } catch (error) {
@@ -483,78 +563,19 @@ function tick() {
   els.elapsed.textContent = formatTime(current);
   els.remaining.textContent = `-${formatTime(Math.max(0, duration - current))}`;
   els.playButton.textContent = state.playing ? "Pause" : "Play";
-  els.status.textContent = state.playing ? "Playing in order" : "Ready";
+  const playlist = currentPlaylist();
+  const cached = loadedCount(playlist);
   if (state.playing) {
+    els.status.textContent = "Playing from cache";
     updateMediaSession();
+  } else if (state.downloading) {
+    els.status.textContent = "Downloading";
+  } else if (cached === playlist.tracks.length) {
+    els.status.textContent = "Cached";
+  } else {
+    els.status.textContent = "Ready";
   }
   requestAnimationFrame(tick);
-}
-
-function matchFiles(fileList, mode) {
-  const playlist = currentPlaylist();
-  const files = Array.from(fileList).filter((file) => file.type.startsWith("audio") || /\.(mp3|m4a|aac|wav|flac|ogg|opus)$/i.test(file.name));
-  if (!files.length) {
-    setToast("No audio files found in that selection.");
-    return [];
-  }
-
-  const assignments = [];
-  if (mode === "order") {
-    files.forEach((file, index) => {
-      if (index < playlist.tracks.length) {
-        assignments.push({ index, file });
-      }
-    });
-    return assignments;
-  }
-
-  const usedFiles = new Set();
-  const usedSlots = new Set();
-  const candidates = [];
-  files.forEach((file, fileIndex) => {
-    playlist.tracks.forEach((track, index) => {
-      const score = scoreFile(file.name, track);
-      if (score >= 35) {
-        candidates.push({ index, fileIndex, file, score });
-      }
-    });
-  });
-  candidates.sort((a, b) => b.score - a.score);
-  candidates.forEach((candidate) => {
-    if (usedFiles.has(candidate.fileIndex) || usedSlots.has(candidate.index)) {
-      return;
-    }
-    usedFiles.add(candidate.fileIndex);
-    usedSlots.add(candidate.index);
-    assignments.push({ index: candidate.index, file: candidate.file });
-  });
-
-  const leftover = files.filter((_file, fileIndex) => !usedFiles.has(fileIndex));
-  leftover.forEach((file) => {
-    const emptyIndex = playlist.tracks.findIndex(
-      (_track, index) =>
-        !usedSlots.has(index) && !state.files.has(trackKey(playlist.id, index)),
-    );
-    if (emptyIndex !== -1) {
-      usedSlots.add(emptyIndex);
-      assignments.push({ index: emptyIndex, file });
-    }
-  });
-  return assignments;
-}
-
-async function importFiles(fileList, mode) {
-  await unlockAudio();
-  const assignments = matchFiles(fileList, mode);
-  for (const assignment of assignments) {
-    await persistFile(trackKey(state.playlistId, assignment.index), assignment.file);
-  }
-  const playlist = currentPlaylist();
-  setToast(`Loaded ${assignments.length} file(s) into ${playlist.name}. ${loadedCount(playlist)}/${playlist.tracks.length} ready.`);
-  if (navigator.storage && navigator.storage.persist) {
-    navigator.storage.persist().catch(() => {});
-  }
-  render();
 }
 
 async function clearCurrentPlaylist() {
@@ -574,29 +595,22 @@ async function clearCurrentPlaylist() {
     audio.removeAttribute("src");
     delete audio.dataset.key;
   });
-  setToast(`Cleared ${playlist.name} audio from this device.`);
+  setToast("Cleared cached audio from this phone.");
+  updateDownloadUi();
   render();
 }
 
 function render() {
   const playlist = currentPlaylist();
-  document.body.dataset.accent = playlist.accent;
   els.now.className = `now ${playlist.accent}`;
   els.title.textContent = playlist.tracks[state.index]?.title || "No track selected";
   els.artist.textContent = playlist.tracks[state.index]?.artist || "";
   const upcoming = nextLoadedIndex(state.index, 1);
   els.next.textContent =
     upcoming === -1
-      ? "Last loaded track"
+      ? "Last cached track"
       : `Next: ${playlist.tracks[upcoming].title}`;
-  els.meta.textContent = `${loadedCount(playlist)} / ${playlist.tracks.length} loaded · 9s crossfade · no shuffle`;
-
-  window.PLAYLISTS.forEach((item) => {
-    const tab = els.tabs.querySelector(`[data-playlist="${item.id}"]`);
-    tab.classList.toggle("active", item.id === playlist.id);
-    tab.classList.toggle("mint", item.accent === "mint");
-    tab.classList.toggle("orange", item.accent === "orange");
-  });
+  els.meta.textContent = `${loadedCount(playlist)} / ${playlist.tracks.length} cached · 9s crossfade · no shuffle`;
 
   els.list.replaceChildren();
   playlist.tracks.forEach((track, index) => {
@@ -613,41 +627,23 @@ function render() {
         <span class="track-title"></span>
         <span class="track-artist"></span>
       </span>
-      <span class="badge ${loaded ? "ok" : ""}">${loaded ? "Ready" : "Missing"}</span>
+      <span class="badge ${loaded ? "ok" : ""}">${loaded ? "Cached" : "Not saved"}</span>
     `;
     button.querySelector(".track-title").textContent = track.title;
-    button.querySelector(".track-artist").textContent = loaded
-      ? `${track.artist} · ${state.files.get(key).name}`
-      : track.artist;
+    button.querySelector(".track-artist").textContent = track.artist;
     button.addEventListener("click", () => {
       if (!loaded) {
-        setToast("Load a file for that track first.");
+        setToast("Download the playlist first.");
         return;
       }
       playFrom(index);
     });
     els.list.appendChild(button);
   });
+  updateDownloadUi();
 }
 
 function bindUi() {
-  els.tabs.addEventListener("click", (event) => {
-    const tab = event.target.closest("[data-playlist]");
-    if (!tab) {
-      return;
-    }
-    if (tab.dataset.playlist === state.playlistId) {
-      return;
-    }
-    pausePlayback();
-    state.playlistId = tab.dataset.playlist;
-    state.index = firstLoadedIndex();
-    if (state.index < 0) {
-      state.index = 0;
-    }
-    render();
-  });
-
   els.playButton.addEventListener("click", () => {
     if (state.playing) {
       pausePlayback();
@@ -657,22 +653,14 @@ function bindUi() {
   });
   els.prevButton.addEventListener("click", () => skip(-1));
   els.nextButton.addEventListener("click", () => skip(1));
-  els.matchInput.addEventListener("change", (event) => {
-    importFiles(event.target.files, "match");
-    event.target.value = "";
-  });
-  els.orderInput.addEventListener("change", (event) => {
-    importFiles(event.target.files, "order");
-    event.target.value = "";
-  });
+  els.downloadButton.addEventListener("click", () => downloadAll());
   els.clearButton.addEventListener("click", () => {
-    if (window.confirm("Remove loaded audio for this playlist from the phone?")) {
+    if (window.confirm("Remove cached audio from this phone?")) {
       clearCurrentPlaylist();
     }
   });
 
   document.addEventListener("visibilitychange", () => {
-    // Stay playing when the screen locks or Safari backgrounds the tab.
     if (state.playing && document.visibilityState === "visible") {
       activeAudio().play().catch(() => {});
     }
@@ -692,12 +680,13 @@ function cacheDom() {
   els.playButton = document.querySelector("#play");
   els.prevButton = document.querySelector("#prev");
   els.nextButton = document.querySelector("#next");
-  els.tabs = document.querySelector("#tabs");
   els.list = document.querySelector("#track-list");
   els.toast = document.querySelector("#toast");
-  els.matchInput = document.querySelector("#file-match");
-  els.orderInput = document.querySelector("#file-order");
   els.clearButton = document.querySelector("#clear");
+  els.downloadButton = document.querySelector("#download");
+  els.downloadFill = document.querySelector("#download-fill");
+  els.downloadTitle = document.querySelector("#download-title");
+  els.downloadDetail = document.querySelector("#download-detail");
   decks.push(document.querySelector("#deck-a"), document.querySelector("#deck-b"));
 }
 
@@ -730,7 +719,7 @@ async function init() {
     state.db = await openDb();
     await restoreFiles();
   } catch (error) {
-    setToast("This browser would not keep files after reload. Load them once before the event.");
+    setToast("This browser would not keep files after reload.");
   }
   if (firstLoadedIndex() !== -1) {
     state.index = firstLoadedIndex();
@@ -738,7 +727,11 @@ async function init() {
   render();
   requestAnimationFrame(tick);
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    navigator.serviceWorker.register("./sw.js?v=4").catch(() => {});
+  }
+  const playlist = currentPlaylist();
+  if (loadedCount(playlist) < playlist.tracks.length) {
+    downloadAll();
   }
 }
 

@@ -1,31 +1,16 @@
 # Fitness Night Player
 
-Temporary private GitHub Pages player for a fitness event. It plays two playlists in order, with a hardcoded 9 second crossfade, and is built for iOS Safari lock-screen playback.
+Midnight Runners player with a hardcoded 9 second crossfade. Tabata is not included.
 
-It does **not** download Spotify audio. Load files you already have the right to play. Those files stay in this phone's browser storage, not in the repo.
+Audio is served temporarily from the prologue.run R2 bucket (`tmp-fitness-night/`) at `https://images.prologue.run`. The phone downloads every track **once** into IndexedDB, then plays only from that cache.
 
-## Playlists
+The MP3s are gitignored and are not on GitHub. Delete the R2 prefix after the event.
 
-- **Midnight Runners** — 35 tracks from the special playlist
-- **Tabata** — first 100 tracks from the Tabata playlist
+## iPhone
 
-No shuffle. Missing tracks are skipped.
+1. Open https://ayip001.github.io/fitness-night-player/ in Safari.
+2. Wait until all 35 tracks show **Cached**.
+3. Share → **Add to Home Screen**.
+4. Tap **Play** once, then lock the phone.
 
-## iPhone setup
-
-1. Open the GitHub Pages URL in Safari.
-2. Share → **Add to Home Screen**.
-3. Put the audio in the Files app.
-4. Open the home-screen app, pick a playlist, then **Load files (match titles)** or **Load files in order**.
-5. Tap **Play** once while the screen is on.
-6. Lock the phone. iOS should keep the audio going and show lock-screen controls.
-
-Keep Safari from discarding the page: don't force-quit the home-screen app during the event.
-
-## Local preview
-
-```powershell
-python -m http.server 4173
-```
-
-Then open `http://127.0.0.1:4173`.
+After that, playback does not stream. Keep the home-screen app running; don’t force-quit it during the event.

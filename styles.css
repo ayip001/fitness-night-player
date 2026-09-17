@@ -71,14 +71,32 @@ h1 {
   font-size: 13px;
 }
 
-.tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 16px;
+.download-card {
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--bg-card);
+  margin-bottom: 12px;
 }
 
-.tab,
+.download-copy {
+  margin-bottom: 12px;
+}
+
+.download-copy p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.download-card .progress-track {
+  margin-bottom: 12px;
+}
+
+.download-card .btn.primary {
+  background: var(--mint);
+  color: #082214;
+  font-weight: 700;
+}
+
 .btn {
   min-height: 48px;
   border: 0;
@@ -86,16 +104,6 @@ h1 {
   background: var(--bg-card);
   color: var(--text);
   cursor: pointer;
-}
-
-.tab.active.mint {
-  background: var(--mint);
-  color: #082214;
-}
-
-.tab.active.orange {
-  background: var(--orange);
-  color: #2a1406;
 }
 
 .now {
@@ -168,6 +176,11 @@ h1 {
   grid-template-columns: 1fr 1.4fr 1fr;
   gap: 8px;
   margin: 16px 0 8px;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .btn.primary {

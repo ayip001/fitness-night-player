@@ -1,0 +1,25 @@
+{
+  "rules": [
+    {
+      "id": "prologue-and-fitness-player",
+      "allowed": {
+        "origins": [
+          "http://localhost:3000",
+          "https://prologue.run",
+          "https://www.prologue.run",
+          "https://prologue-run.vercel.app",
+          "https://staging.prologue.run",
+          "https://ayip001.github.io",
+          "https://angusyeet.com",
+          "http://angusyeet.com",
+          "http://127.0.0.1:4173",
+          "http://localhost:4173"
+        ],
+        "methods": ["GET", "HEAD"],
+        "headers": ["*"]
+      },
+      "exposeHeaders": ["ETag", "Content-Length", "Content-Range"],
+      "maxAgeSeconds": 86400
+    }
+  ]
+}

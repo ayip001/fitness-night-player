@@ -14,31 +14,22 @@
     <link rel="manifest" href="./manifest.json" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=4" />
   </head>
   <body>
     <main class="app">
       <header class="top">
         <div>
           <p class="eyebrow">iOS lock-screen player</p>
-          <h1>Fitness Night</h1>
+          <h1>Midnight Runners</h1>
         </div>
         <div id="status" class="status-pill">Ready</div>
       </header>
 
-      <div id="tabs" class="tabs">
-        <button class="tab mint active" type="button" data-playlist="special">
-          Midnight Runners
-        </button>
-        <button class="tab orange" type="button" data-playlist="tabata">
-          Tabata
-        </button>
-      </div>
-
       <section id="now" class="now mint">
         <div class="now-label">Now playing</div>
-        <h2 id="now-title" class="now-title">Load your files</h2>
-        <p id="now-artist" class="now-artist">Nothing loaded yet</p>
+        <h2 id="now-title" class="now-title">Download the playlist</h2>
+        <p id="now-artist" class="now-artist">Nothing cached yet</p>
         <div class="progress-wrap">
           <div class="progress-track">
             <div id="progress-fill" class="progress-fill"></div>
@@ -49,7 +40,7 @@
           </div>
         </div>
         <p id="next-line" class="next-line">Next: —</p>
-        <p id="meta-line" class="meta-line">0 / 0 loaded · 9s crossfade · no shuffle</p>
+        <p id="meta-line" class="meta-line">0 / 35 cached · 9s crossfade · no shuffle</p>
         <div class="controls">
           <button id="prev" class="btn" type="button">Prev</button>
           <button id="play" class="btn primary" type="button">Play</button>
@@ -57,40 +48,28 @@
         </div>
       </section>
 
+      <section id="download-card" class="download-card">
+        <div class="download-copy">
+          <strong id="download-title">Save playlist on this phone</strong>
+          <p id="download-detail">Downloads every track once, then plays from device storage.</p>
+        </div>
+        <div class="progress-track">
+          <div id="download-fill" class="progress-fill"></div>
+        </div>
+        <div class="import-row">
+          <button id="download" class="btn primary" type="button">Download all</button>
+          <button id="clear" class="btn danger" type="button">Clear cache</button>
+        </div>
+      </section>
+
       <p id="toast" class="toast">
-        Load files you already have, then Add to Home Screen before the event.
+        Open this page on the phone over HTTPS, then download all tracks once. Playback uses the on-device cache after that.
       </p>
 
       <p class="hint">
-        <strong>iPhone:</strong> Share the audio into Files, then load them here.
-        Use <strong>Add to Home Screen</strong>, tap Play once, and you can lock
-        the phone. Playback stays in playlist order with a hardcoded 9 second
-        crossfade. Files stay on this device, not in the GitHub repo.
+        Playback uses cached files only — no streaming after the download finishes.
+        Add to Home Screen, tap Play once, then lock the phone.
       </p>
-
-      <div class="import-row">
-        <button class="btn" type="button" onclick="document.querySelector('#file-match').click()">
-          Load files (match titles)
-        </button>
-        <button class="btn" type="button" onclick="document.querySelector('#file-order').click()">
-          Load files in order
-        </button>
-        <button id="clear" class="btn danger" type="button">Clear this playlist</button>
-        <input
-          id="file-match"
-          class="hidden-input"
-          type="file"
-          accept="audio/*"
-          multiple
-        />
-        <input
-          id="file-order"
-          class="hidden-input"
-          type="file"
-          accept="audio/*"
-          multiple
-        />
-      </div>
 
       <section id="track-list" class="track-list"></section>
     </main>
@@ -100,7 +79,7 @@
       <audio id="deck-b" playsinline webkit-playsinline></audio>
     </div>
 
-    <script src="./playlists.js"></script>
-    <script src="./app.js"></script>
+    <script src="./playlists.js?v=4"></script>
+    <script src="./app.js?v=4"></script>
   </body>
 </html>
